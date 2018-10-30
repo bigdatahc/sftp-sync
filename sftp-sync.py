@@ -11,8 +11,11 @@ def parse_args():
     parser = argparse.ArgumentParser(
         description="Transfer files via SFTP",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    
+
     parser.add_argument("config")
+    parser.add_argument("--dry-run", "dryrun",
+                        help="Print what would happen, but don't transfer anything")
+
     return parser.parse_args()
 
 
@@ -31,9 +34,10 @@ class SftpSync:
 
     default_port = 22
     
-    def __init__(self, source, dest, hooks=None):
+    def __init__(self, source, dest, dry_run=False, hooks=None):
         self.source = self.get_sftp_connection(source)
         self.dest = self.get_sftp_connection(dest)
+        self.dry_run = dry_run
         self.hooks = hooks
         self.file_details = {}
 
@@ -77,8 +81,11 @@ class SftpSync:
         dest_files = self.read_files(self.dest)
 
         diff = set(source_files) - set(dest_files)
-        for file in diff:
-            self.transfer_file(file)
+        for filename in diff:
+            if self.dry_run:
+                print("Would transfer {} (but --dry-run enabled, nothing will be transferred").format(filename)
+            else:
+                self.transfer_file(filename)
 
     def read_files(self, sftp, store_details=False):
         files = sftp.listdir_attr()
