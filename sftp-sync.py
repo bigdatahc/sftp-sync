@@ -1,10 +1,13 @@
 import io
 import sys
 import json
+import pickle
 import argparse
 import paramiko
 import requests
 import configparser
+
+REQUIRED_CONFIG_SECTIONS = ('source', 'dest', 'general')
 
 
 def parse_args():
@@ -23,8 +26,13 @@ def get_config(conf_file):
     config = configparser.ConfigParser()
     config.read(conf_file)
 
-    if 'source' not in config or 'dest' not in config:
-        print("ERROR: `source` and `dest` sections must be defined in config file ({})".format(conf_file))
+    for section in REQUIRED_CONFIG_SECTIONS:
+        if section not in config:
+            print("ERROR: `{}` must be defined in config file ({})".format(section, conf_file))
+            sys.exit(1)
+
+    if 'name' not in config['general']:
+        print('ERROR: Must defined `name` in [general]')
         sys.exit(1)
 
     return config
@@ -35,17 +43,20 @@ class SftpSync:
     default_port = 22
     
     def __init__(self, config, dry_run=False):
+        self.name = config['general']['name']
+        self.state_file = '.{}.pickle'.format(self.name)
+
         self.source = self.get_sftp_connection(config['source'])
         self.dest = self.get_sftp_connection(config['dest'])
 
         self.hooks = None
         if config.has_section('hooks'):
             self.hooks = config['hooks']
-            
+
         self.dry_run = dry_run
         self.file_details = {}
 
-    def _validate_config(self, config):
+    def _validate_sftp_config(self, config):
         for key in ('HOST', 'USER', 'PASS'):
             if key not in config:
                 print("ERROR: Missing key `{}`".format(key))
@@ -67,7 +78,7 @@ class SftpSync:
         return port
         
     def get_sftp_connection(self, config):
-        self._validate_config(config)
+        self._validate_sftp_config(config)
 
         transport = paramiko.Transport((config['HOST'], int(config['PORT'])))
         transport.connect(
@@ -81,39 +92,51 @@ class SftpSync:
 
         return sftp
 
-    def sync(self):
-        source_files = self.read_files(self.source, store_details=True)
-        dest_files = self.read_files(self.dest)
+    def load_state(self):
+        try:
+            with open(self.state_file, 'rb') as fd:
+                return pickle.load(fd)
+        except FileNotFoundError:
+            return []
 
-        diff = set(source_files) - set(dest_files)
+    def store_state(self, files):
+        with open(self.state_file, 'wb') as fd:
+            pickle.dump(files, fd)
+
+    def transfer(self):
+        transferred = self.load_state()
+        source_files = self.read_source_files(self.source)
+
+        diff = set(source_files) - set(transferred)
+        print("Found {} files to transfer.".format(len(diff)))
         for filename in diff:
             if self.dry_run:
                 print("Would transfer {}".format(filename))
             else:
                 self.transfer_file(filename)
+                transferred.append(filename)
 
-    def read_files(self, sftp, store_details=False):
+        self.store_state(transferred)
+
+    def read_source_files(self, sftp):
         files = sftp.listdir_attr()
-        filenames = []
         for file in files:
-            filenames.append(file.filename)
-            if store_details and file.filename not in self.file_details:
-                self.file_details[file.filename] = file
+            self.file_details[file.filename] = file
                 
-        return filenames
+        return self.file_details.keys()
 
     def transfer_file(self, filename):
         # Currently doing the transfer in memory.
         # For huge files we need to change this to use the disk.
-        flo = io.BytesIO()
-        self.source.getfo(filename, flo)
-        self.dest.putfo(flo, filename, confirm=True)
+        #flo = io.BytesIO()
+        #self.source.getfo(filename, flo)
+        #self.dest.putfo(flo, filename, confirm=True)
 
         self.notify(filename)
 
     def notify(self, filename):
         if self.hooks.get('slack'):
-            message = 'Transferred {} ({} bytes))'.format(filename, self.file_details[filename].st_size)
+            message = 'Transferred {} ({} bytes)'.format(filename, self.file_details[filename].st_size)
             payload = json.dumps({'text': message})
             requests.post(self.hooks['slack'], data=payload)
 
@@ -125,7 +148,7 @@ def main():
 
     config = get_config(args.config)
     sftp_sync = SftpSync(config, args.dry_run)
-    sftp_sync.sync()
+    sftp_sync.transfer()
     
 
 if __name__ == '__main__':
