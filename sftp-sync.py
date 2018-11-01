@@ -7,7 +7,7 @@ import paramiko
 import requests
 import configparser
 
-REQUIRED_CONFIG_SECTIONS = ('source', 'dest', 'general')
+REQUIRED_CONFIG_SECTIONS = ('source', 'dest', 'main')
 
 
 def parse_args():
@@ -31,8 +31,8 @@ def get_config(conf_file):
             print("ERROR: `{}` must be defined in config file ({})".format(section, conf_file))
             sys.exit(1)
 
-    if 'name' not in config['general']:
-        print('ERROR: Must defined `name` in [general]')
+    if 'name' not in config['main']:
+        print('ERROR: Must defined `name` in [main]')
         sys.exit(1)
 
     return config
@@ -43,15 +43,11 @@ class SftpSync:
     default_port = 22
     
     def __init__(self, config, dry_run=False):
-        self.name = config['general']['name']
-        self.state_file = '.{}.pickle'.format(self.name)
+        self.config = config
+        self.state_file = '.{}.pickle'.format(config['main']['name'])
 
         self.source = self.get_sftp_connection(config['source'])
         self.dest = self.get_sftp_connection(config['dest'])
-
-        self.hooks = None
-        if config.has_section('hooks'):
-            self.hooks = config['hooks']
 
         self.dry_run = dry_run
         self.file_details = {}
@@ -135,10 +131,10 @@ class SftpSync:
         self.notify(filename)
 
     def notify(self, filename):
-        if self.hooks.get('slack'):
+        if self.config['main'].get('slack'):
             message = 'Transferred {} ({} bytes)'.format(filename, self.file_details[filename].st_size)
             payload = json.dumps({'text': message})
-            requests.post(self.hooks['slack'], data=payload)
+            requests.post(self.config['main']['slack'], data=payload)
 
 
 def main():
