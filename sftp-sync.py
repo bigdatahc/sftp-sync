@@ -1,3 +1,4 @@
+ls
 import io
 import sys
 import json
@@ -23,7 +24,7 @@ def parse_args():
 
 
 def get_config(conf_file):
-    config = configparser.ConfigParser()
+    config = configparser.ConfigParser(interpolation=None)
     config.read(conf_file)
 
     for section in REQUIRED_CONFIG_SECTIONS:
