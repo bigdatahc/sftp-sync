@@ -1,4 +1,3 @@
-ls
 import io
 import sys
 import json
@@ -129,9 +128,9 @@ class SftpSync:
     def transfer_file(self, filename):
         # Currently doing the transfer in memory.
         # For huge files we need to change this to use the disk.
-        #flo = io.BytesIO()
-        #self.source.getfo(filename, flo)
-        #self.dest.putfo(flo, filename, confirm=True)
+        flo = io.BytesIO()
+        self.source.getfo(filename, flo)
+        self.dest.putfo(flo, filename, confirm=True)
 
         self.notify(filename)
 
