@@ -1,4 +1,5 @@
 import io
+import os
 import sys
 import json
 import pickle
@@ -122,11 +123,15 @@ class SftpSync:
         return self.file_details.keys()
 
     def transfer_file(self, filename):
-        # Currently doing the transfer in memory.
-        # For huge files we need to change this to use the disk.
-        flo = io.BytesIO()
-        self.source.getfo(filename, flo)
-        self.dest.putfo(flo, filename, confirm=True)
+        # If archive_dir is defined then transfer via disk.  If not, transfer in memory
+        if self.config['main'].get('archive_dir'):
+            localpath = os.path.join(self.config['main']['archive_dir'], filename)
+            self.source.get(filename, localpath)
+            self.dest.put(localpath, filename, confirm=True)
+        else:
+            flo = io.BytesIO()
+            self.source.getfo(filename, flo)
+            self.dest.putfo(flo, filename, confirm=True)
 
         self.notify(filename)
 
