@@ -123,7 +123,7 @@ class SftpSync:
                     self.transfer_file(filename)
                     transferred.append(filename)
 
-        if self.zip:
+        if diff and self.zip:
             self.transfer_zip(local_files, diff)
             transferred.extend(diff)
 
