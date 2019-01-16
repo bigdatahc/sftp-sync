@@ -3,10 +3,12 @@ import os
 import sys
 import json
 import pickle
+import zipfile
 import argparse
 import paramiko
 import requests
 import configparser
+from datetime import date
 
 REQUIRED_CONFIG_SECTIONS = ('source', 'dest', 'main')
 
@@ -42,10 +44,11 @@ def get_config(conf_file):
 class SftpSync:
 
     default_port = 22
-    
+
     def __init__(self, config, dry_run=False):
         self.config = config
         self.state_file = '.{}.pickle'.format(config['main']['name'])
+        self.zip = bool(config['main'].get('zip'))
 
         self.source = self.get_sftp_connection(config['source'])
         self.dest = self.get_sftp_connection(config['dest'])
@@ -73,7 +76,7 @@ class SftpSync:
                 sys.exit(1)
 
         return port
-        
+
     def get_sftp_connection(self, config):
         self._validate_sftp_config(config)
 
@@ -83,7 +86,7 @@ class SftpSync:
             password=config['PASS']
         )
         sftp = paramiko.SFTPClient.from_transport(transport)
-        
+
         if config.get('DIR'):
             sftp.chdir(config['DIR'])
 
@@ -105,13 +108,21 @@ class SftpSync:
         source_files = self.read_source_files(self.source)
 
         diff = set(source_files) - set(transferred)
+        local_files = []
         print("Found {} files to transfer.".format(len(diff)))
         for filename in diff:
             if self.dry_run:
                 print("Would transfer {}".format(filename))
             else:
-                self.transfer_file(filename)
-                transferred.append(filename)
+                if self.zip:
+                    local_files.append(self.download_file(filename))
+                else:
+                    self.transfer_file(filename)
+                    transferred.append(filename)
+
+        if self.zip:
+            self.transfer_zip(local_files, diff)
+            transferred.extend(diff)
 
         self.store_state(transferred)
 
@@ -119,8 +130,29 @@ class SftpSync:
         files = sftp.listdir_attr()
         for file in files:
             self.file_details[file.filename] = file
-                
+
         return self.file_details.keys()
+
+    def download_file(self, filename):
+        if self.config['main'].get('archive_dir'):
+            localpath = os.path.join(self.config['main']['archive_dir'], filename)
+            self.source.get(filename, localpath)
+        else:
+            # TODO - use tempfile here
+            pass
+
+        return localpath
+
+    def transfer_zip(self, local_files, filenames):
+        isodate = date.today().strftime('%Y-%m-%d')
+        zip_filename = '{}-{}.zip'.format(self.config['main']['name'], isodate)
+        with zipfile.ZipFile(zip_filename, 'w') as myzip:
+            for file in local_files:
+                myzip.write(file)
+
+        self.dest.put(zip_filename, zip_filename, confirm=True)
+        msg = '\nContains: [{}]'.format(', '.join(filenames))
+        self.notify(zip_filename, extra_message=msg)
 
     def transfer_file(self, filename):
         # If archive_dir is defined then transfer via disk.  If not, transfer in memory
@@ -135,9 +167,10 @@ class SftpSync:
 
         self.notify(filename)
 
-    def notify(self, filename):
+    def notify(self, filename, extra_message=""):
         if self.config['main'].get('slack'):
             message = 'Transferred {} ({} bytes)'.format(filename, self.file_details[filename].st_size)
+            message += extra_message
             payload = json.dumps({'text': message})
             requests.post(self.config['main']['slack'], data=payload)
 
@@ -150,7 +183,7 @@ def main():
     config = get_config(args.config)
     sftp_sync = SftpSync(config, args.dry_run)
     sftp_sync.transfer()
-    
+
 
 if __name__ == '__main__':
     main()
