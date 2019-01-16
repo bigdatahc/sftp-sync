@@ -148,11 +148,13 @@ class SftpSync:
         zip_filename = '{}-{}.zip'.format(self.config['main']['name'], isodate)
         with zipfile.ZipFile(zip_filename, 'w') as myzip:
             for file in local_files:
-                myzip.write(file)
+                myzip.write(file, os.path.basename(file))
 
         self.dest.put(zip_filename, zip_filename, confirm=True)
-        msg = '\nContains: [{}]'.format(', '.join(filenames))
-        self.notify(zip_filename, extra_message=msg)
+        msg = 'Transferred {}\nContains:'.format(zip_filename)
+        for filename in filenames:
+            msg += '\n    - {} ({} bytes)'.format(filename, self.file_details[filename].st_size)
+        self.notify(zip_filename, msg)
 
     def transfer_file(self, filename):
         # If archive_dir is defined then transfer via disk.  If not, transfer in memory
@@ -167,10 +169,10 @@ class SftpSync:
 
         self.notify(filename)
 
-    def notify(self, filename, extra_message=""):
+    def notify(self, filename, message=None):
         if self.config['main'].get('slack'):
-            message = 'Transferred {} ({} bytes)'.format(filename, self.file_details[filename].st_size)
-            message += extra_message
+            if not message:
+                message = 'Transferred {} ({} bytes)'.format(filename, self.file_details[filename].st_size)
             payload = json.dumps({'text': message})
             requests.post(self.config['main']['slack'], data=payload)
 
