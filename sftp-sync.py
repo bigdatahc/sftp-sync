@@ -1,4 +1,3 @@
-import io
 import os
 import sys
 import json
@@ -35,7 +34,11 @@ def get_config(conf_file):
             sys.exit(1)
 
     if 'name' not in config['main']:
-        print('ERROR: Must defined `name` in [main]')
+        print('ERROR: Must define `name` in [main]')
+        sys.exit(1)
+
+    if 'archive_dir' not in config['main']:
+        print('ERROR: Must define `archive_dir` in [main]')
         sys.exit(1)
 
     return config
@@ -134,39 +137,27 @@ class SftpSync:
         return self.file_details.keys()
 
     def download_file(self, filename):
-        if self.config['main'].get('archive_dir'):
-            localpath = os.path.join(self.config['main']['archive_dir'], filename)
-            self.source.get(filename, localpath)
-        else:
-            # TODO - use tempfile here
-            pass
-
+        localpath = os.path.join(self.config['main']['archive_dir'], filename)
+        self.source.get(filename, localpath)
         return localpath
 
     def transfer_zip(self, local_files, filenames):
         isodate = date.today().strftime('%Y-%m-%d')
         zip_filename = '{}-{}.zip'.format(self.config['main']['name'], isodate)
-        with zipfile.ZipFile(zip_filename, 'w') as myzip:
+        zip_path = os.path.join(self.config['main']['archive_dir'], zip_filename)
+        with zipfile.ZipFile(zip_path, 'w') as myzip:
             for file in local_files:
                 myzip.write(file, os.path.basename(file))
 
-        self.dest.put(zip_filename, zip_filename, confirm=True)
+        self.dest.put(zip_path, zip_filename, confirm=True)
         msg = 'Transferred {}\nContains:'.format(zip_filename)
         for filename in filenames:
             msg += '\n    - {} ({} bytes)'.format(filename, self.file_details[filename].st_size)
         self.notify(zip_filename, msg)
 
     def transfer_file(self, filename):
-        # If archive_dir is defined then transfer via disk.  If not, transfer in memory
-        if self.config['main'].get('archive_dir'):
-            localpath = os.path.join(self.config['main']['archive_dir'], filename)
-            self.source.get(filename, localpath)
-            self.dest.put(localpath, filename, confirm=True)
-        else:
-            flo = io.BytesIO()
-            self.source.getfo(filename, flo)
-            self.dest.putfo(flo, filename, confirm=True)
-
+        localpath = self.download_file(filename)
+        self.dest.put(localpath, filename, confirm=True)
         self.notify(filename)
 
     def notify(self, filename, message=None):
