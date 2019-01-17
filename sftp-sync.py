@@ -150,9 +150,10 @@ class SftpSync:
                 myzip.write(file, os.path.basename(file))
 
         self.dest.put(zip_path, zip_filename, confirm=True)
-        msg = 'Transferred {}\nContains:'.format(zip_filename)
+        msg = 'Transferred {}\n```Contains:'.format(zip_filename)
         for filename in filenames:
             msg += '\n    - {} ({} bytes)'.format(filename, self.file_details[filename].st_size)
+        msg += '```'
         self.notify(zip_filename, msg)
 
     def transfer_file(self, filename):
