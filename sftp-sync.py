@@ -132,7 +132,8 @@ class SftpSync:
     def read_source_files(self, sftp):
         files = sftp.listdir_attr()
         for file in files:
-            self.file_details[file.filename] = file
+            if file.st_size:
+                self.file_details[file.filename] = file
 
         return self.file_details.keys()
 
