@@ -109,7 +109,7 @@ class SftpSync:
 
     @property
     def remote_archive(self):
-        return bool(self.config.get('remote_archive_dir'))
+        return bool(self.config['main'].get('remote_archive_dir'))
 
     def transfer(self):
         transferred = self.load_state()
@@ -140,7 +140,7 @@ class SftpSync:
         self.store_state(transferred)
 
     def archive(self, filename):
-        archive_filename = os.path.join(self.config['remote_archive_dir'], filename)
+        archive_filename = os.path.join(self.config['main']['remote_archive_dir'], filename)
         self.source.rename(filename, archive_filename)
 
     def read_source_files(self, sftp):
