@@ -1,6 +1,7 @@
 import os
 import sys
 import json
+import time
 import pickle
 import zipfile
 import argparse
@@ -157,7 +158,7 @@ class SftpSync:
 
     def transfer_zip(self, local_files, filenames):
         isodate = date.today().strftime('%Y-%m-%d')
-        zip_filename = '{}-{}.zip'.format(self.config['main']['name'], isodate)
+        zip_filename = '{}-{}-{}.zip'.format(self.config['main']['name'], isodate, int(time.time()))
         zip_path = os.path.join(self.config['main']['archive_dir'], zip_filename)
         with zipfile.ZipFile(zip_path, 'w') as myzip:
             for file in local_files:
