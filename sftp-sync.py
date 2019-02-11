@@ -139,7 +139,7 @@ class SftpSync:
 
         self.store_state(transferred)
 
-    def archive(self, filename):
+    def archive_file(self, filename):
         archive_filename = os.path.join(self.config['main']['remote_archive_dir'], filename)
         self.source.rename(filename, archive_filename)
 
