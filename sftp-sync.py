@@ -106,6 +106,10 @@ class SftpSync:
         with open(self.state_file, 'wb') as fd:
             pickle.dump(files, fd)
 
+    @property
+    def archive(self):
+        return bool(self.config.get('archive_dir'))
+
     def transfer(self):
         transferred = self.load_state()
         source_files = self.read_source_files(self.source)
@@ -122,12 +126,21 @@ class SftpSync:
                 else:
                     self.transfer_file(filename)
                     transferred.append(filename)
+                    if self.archive:
+                        self.archive_file(filename)
 
         if diff and self.zip:
             self.transfer_zip(local_files, diff)
             transferred.extend(diff)
+            if self.archive:
+                for filename in diff:
+                    self.archive_file(filename)
 
         self.store_state(transferred)
+
+    def archive(self, filename):
+        archive_filename = os.path.join(self.config['archive_dir'], filename)
+        self.source.rename(filename, archive_filename)
 
     def read_source_files(self, sftp):
         files = sftp.listdir_attr()
