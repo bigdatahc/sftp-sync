@@ -179,7 +179,7 @@ class SftpSync:
     def notify(self, filename, message=None):
         if self.config['main'].get('slack'):
             if not message:
-                message = 'Transferred {} ({} bytes)'.format(filename, self.file_details[filename].st_size)
+                message = '[{}] Transferred {} ({} bytes)'.format(self.config['main']['name'], filename, self.file_details[filename].st_size)
             payload = json.dumps({'text': message})
             requests.post(self.config['main']['slack'], data=payload)
 
